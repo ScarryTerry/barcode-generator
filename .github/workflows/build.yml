@@ -3,7 +3,7 @@ name: Build Electron Apps
 on:
   push:
     branches:
-      - main # Runs whenever you push code to your main branch
+      - master # Runs whenever you push code to your main branch
 
 jobs:
   release:
