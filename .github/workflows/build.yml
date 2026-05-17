@@ -35,12 +35,11 @@ jobs:
           ELECTRON_BUILDER_CACHE: ${{ github.workspace }}/.cache/electron-builder
         run: |
           if [ "$RUNNER_OS" == "Windows" ]; then
-            npm run build:win
+            npm run build:win -- --publish never
           elif [ "$RUNNER_OS" == "Linux" ]; then
-            # ELECTRON_DISABLE_SECURITY_WARNINGS suppresses headless container issues
-            ELECTRON_DISABLE_SECURITY_WARNINGS=true npm run build:linux
+            ELECTRON_DISABLE_SECURITY_WARNINGS=true npm run build:linux -- --publish never
           elif [ "$RUNNER_OS" == "macOS" ]; then
-            npm run build:mac
+            npm run build:mac -- --publish never
           fi
         shell: bash
 
