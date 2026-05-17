@@ -7,6 +7,7 @@ const QRCode = require('qrcode');
 
 let mainWindow;
 
+
 function createWindow() {
   mainWindow = new BrowserWindow({
   width: 113.04,
