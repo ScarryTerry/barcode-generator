@@ -12,6 +12,7 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     strategy:
+      fail-fast: false # <-- IMPORTANT: If Linux fails, Windows & Mac will still finish!
       matrix:
         os: [windows-latest, ubuntu-latest, macos-latest]
 
@@ -20,7 +21,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4 # <-- Fixed this line here!
+        uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: "npm"
@@ -29,11 +30,15 @@ jobs:
         run: npm install
 
       - name: Build Application
+        env:
+          ELECTRON_CACHE: ${{ github.workspace }}/.cache/electron
+          ELECTRON_BUILDER_CACHE: ${{ github.workspace }}/.cache/electron-builder
         run: |
           if [ "$RUNNER_OS" == "Windows" ]; then
             npm run build:win
           elif [ "$RUNNER_OS" == "Linux" ]; then
-            npm run build:linux
+            # ELECTRON_DISABLE_SECURITY_WARNINGS suppresses headless container issues
+            ELECTRON_DISABLE_SECURITY_WARNINGS=true npm run build:linux
           elif [ "$RUNNER_OS" == "macOS" ]; then
             npm run build:mac
           fi
@@ -43,4 +48,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Electron-Build-${{ matrix.os }}
-          path: dist/*
+          path: |
+            dist/*.exe
+            dist/*.dmg
+            dist/*.AppImage
+            dist/*.deb
