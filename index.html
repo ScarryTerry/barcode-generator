@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <title>Генератор пакетів штрих-кодів та QR-кодів</title>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; padding: 20px; background-color: #f8f9fa; color: #333; }
+    h2 { color: #1e293b; margin-bottom: 20px; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px; }
+    .form-group { margin-bottom: 18px; }
+    label { display: block; margin-bottom: 6px; font-weight: bold; color: #475569; }
+    input[type="text"], input[type="number"] { width: 100%; padding: 10px; box-sizing: border-box; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px; }
+    input:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1); }
+    .dir-container { display: flex; gap: 10px; align-items: center; }
+    button { padding: 10px 20px; background: #2563eb; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 500; }
+    button:hover { background: #1d4ed8; }
+    #btn-dir { background: #64748b; }
+    #btn-dir:hover { background: #475569; }
+    #selected-dir { font-size: 13px; color: #64748b; word-break: break-all; }
+    .btn-submit-container { margin-top: 25px; }
+    #btn-submit { width: 100%; padding: 12px; font-size: 16px; background: #059669; }
+    #btn-submit:hover { background: #047857; }
+    #status { margin-top: 20px; padding: 12px; border-radius: 6px; font-size: 14px; display: none; white-space: pre-line; line-height: 1.5; }
+    .status-loading { display: block !important; background: #eff6ff; color: #1e40af; border: 1px solid #bfdbfe; }
+    .status-success { display: block !important; background: #ecfdf5; color: #065f46; border: 1px solid #a7f3d0; }
+    .status-error { display: block !important; background: #fef2f2; color: #991b1b; border: 1px solid #fca5a5; }
+  </style>
+</head>
+<body>
+  <h2>Генерація пакету кодів</h2>
+  
+  <div class="form-group">
+    <label for="name">Назва продукту / об'єкта:</label>
+    <input type="text" id="name" value="Продукт_А">
+  </div>
+  
+  <div class="form-group">
+    <label for="batchNumber">Базовий номер партії:</label>
+    <input type="text" id="batchNumber" value="ПАРТ-2026">
+  </div>
+  
+  <div class="form-group">
+    <label for="amount">Кількість штрих-кодів для генерації:</label>
+    <input type="number" id="amount" value="10" min="1">
+  </div>
+  
+  <div class="form-group">
+    <label>Папка для збереження файлів:</label>
+    <div class="dir-container">
+      <button id="btn-dir">Вибрати папку</button>
+      <span id="selected-dir">Папку не вибрано</span>
+    </div>
+  </div>
+
+  <div class="btn-submit-container">
+    <button id="btn-submit">Згенерувати файли</button>
+  </div>
+
+  <div id="status"></div>
+
+  <script>
+    let selectedDirectory = '';
+    const statusDiv = document.getElementById('status');
+
+    document.getElementById('btn-dir').addEventListener('click', async () => {
+      selectedDirectory = await window.electronAPI.selectDirectory();
+      document.getElementById('selected-dir').innerText = selectedDirectory || 'Папку не вибрано';
+    });
+
+    document.getElementById('btn-submit').addEventListener('click', async () => {
+      const name = document.getElementById('name').value.trim();
+      const batchNumber = document.getElementById('batchNumber').value.trim();
+      const amount = parseInt(document.getElementById('amount').value);
+
+      if(!name || !batchNumber || !amount || !selectedDirectory) {
+        alert('Будь ласка, заповніть усі поля та виберіть папку для збереження.');
+        return;
+      }
+
+      statusDiv.className = 'status-loading';
+      statusDiv.innerText = 'Генерація файлів... Будь ласка, зачекайте.';
+
+      const result = await window.electronAPI.generateBatch({
+        name, batchNumber, amount, saveDir: selectedDirectory
+      });
+
+      if(result.success) {
+        statusDiv.className = 'status-success';
+        statusDiv.innerText = `Успішно згенеровано!\n\n📄 PDF зі штрих-кодами:\n${result.pdfPath}\n\n🖼️ QR-код партії:\n${result.qrPath}`;
+      } else {
+        statusDiv.className = 'status-error';
+        statusDiv.innerText = `Помилка: ${result.error}`;
+      }
+    });
+  </script>
+</body>
+</html>
