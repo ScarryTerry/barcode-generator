@@ -3,7 +3,8 @@ name: Build Electron Apps
 on:
   push:
     branches:
-      - master # Runs whenever you push code to your main branch
+      - main
+      - master
 
 jobs:
   release:
@@ -19,7 +20,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup Node.js
-        uses: actions/tools-node@v4
+        uses: actions/setup-node@v4 # <-- Fixed this line here!
         with:
           node-version: 20
           cache: "npm"
