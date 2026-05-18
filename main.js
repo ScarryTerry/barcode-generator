@@ -4,6 +4,7 @@ const fs = require('fs');
 const PDFDocument = require('pdfkit');
 const bwipjs = require('bwip-js');
 const QRCode = require('qrcode');
+require('dotenv').config();
 
 let mainWindow;
 
@@ -66,38 +67,66 @@ ipcMain.handle('generate-batch', async (event, data) => {
     const barcodeList = [];
 
     for (let i = 1; i <= amount; i++) {
-      const currentId = `${batchNumber}/${i}`;
-      barcodeList.push(currentId);
+  const currentId = `${batchNumber}/${i}`;
+  barcodeList.push(currentId);
 
-      if (i > 1) {
-        doc.addPage({ 
-          size: [labelWidth, labelHeight], 
-          margins: { top: 0, bottom: 0, left: 0, right: 0 } 
-        });
-      }
+  if (i > 1) {
+    doc.addPage({ 
+      size: [labelWidth, labelHeight], 
+      margins: { top: 0, bottom: 0, left: 0, right: 0 } 
+    });
+  }
 
-      // --- Centered Layout Blocks ---
-      // Using a slightly smaller font size to ensure long Ukrainian words fit comfortably
-      doc.fontSize(6).text(`${name}`, 0, 5, { width: labelWidth, align: 'center' });
-      doc.fontSize(5).text(`Партія: ${batchNumber}`, 0, 13, { width: labelWidth, align: 'center' });
+  // 1. --- Render the Name (with Dynamic Font Size) ---
+  // If the name is longer than 20 characters, drop size to 5, otherwise keep it at 6
+  const nameFontSize = name.length > 20 ? 5 : 6;
+  doc.fontSize(nameFontSize);
+  
+  doc.text(`${name}`, 0, 3, { width: labelWidth, align: 'center' });
+  
+  // PDFKit will accurately measure the height using whatever font size was just applied
+  const nameHeight = doc.heightOfString(`${name}`, { width: labelWidth });
 
-      // --- Barcode ---
-      const barcodeBuffer = await bwipjs.toBuffer({
-        bcid: 'code128',       
-        text: currentId,       
-        scale: 1.5,             
-        height: 8,             
-        includetext: false,    
-      });
+  // 2. --- NEW: Render Manufacturer ("Виробник") ---
+  const manufacturerText = `Виробник: ${process.env.MANUFACTURER_NAME || 'Компанія відсутня'}`;
+  const manufacturerY = 3 + nameHeight + 1; 
+  
+  doc.fontSize(5).text(manufacturerText, 0, manufacturerY, { width: labelWidth, align: 'center' });
+  const manufacturerHeight = doc.heightOfString(manufacturerText, { width: labelWidth });
 
-      const barcodeRenderWidth = 90; 
-      const barcodeX = (labelWidth - barcodeRenderWidth) / 2;
+  // 3. --- Render Batch Number (Italicized) ---
+  const batchY = manufacturerY + manufacturerHeight + 1; 
+  doc.fontSize(5).text(`Партія: ${batchNumber}`, 0, batchY, { 
+    width: labelWidth, 
+    align: 'center',
+    oblique: true 
+  });
 
-      doc.image(barcodeBuffer, barcodeX, 22, { width: barcodeRenderWidth });
-      
-      // --- Footer ---
-      doc.fontSize(5).text(`(${currentId})`, 0, 56, { width: labelWidth, align: 'center' });
-    }
+  // 4. --- Generate & Render Barcode ---
+  const barcodeBuffer = await bwipjs.toBuffer({
+    bcid: 'code128',       
+    text: currentId,       
+    scale: 1.5,             
+    height: 5,             // Slightly compressed to accommodate the new line
+    includetext: false,    
+  });
+
+  const barcodeRenderWidth = 90; 
+  const barcodeX = (labelWidth - barcodeRenderWidth) / 2;
+  
+  // 5 points for batch text height + 3 points gap
+  const barcodeY = batchY + 5 + 3; 
+  const barcodeRenderHeight = 8; 
+
+  doc.image(barcodeBuffer, barcodeX, barcodeY, { 
+    width: barcodeRenderWidth,
+    height: barcodeRenderHeight 
+  });
+  
+  // 5. --- Footer ---
+  const footerY = barcodeY + barcodeRenderHeight + 2;
+  doc.fontSize(5).text(`${currentId}`, 0, footerY, { width: labelWidth, align: 'center' });
+}
     
     doc.end();
 
