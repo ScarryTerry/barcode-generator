@@ -24,6 +24,9 @@ function createWindow() {
   mainWindow.loadFile('index.html');
 }
 
+// --- ADD THIS LINE HERE BEFORE THE APP READY EVENT ---
+app.disableHardwareAcceleration();
+
 app.whenReady().then(createWindow);
 
 // Handle directory selection dialog
@@ -107,16 +110,18 @@ ipcMain.handle('generate-batch', async (event, data) => {
     bcid: 'code128',       
     text: currentId,       
     scale: 1.5,             
-    height: 5,             // Slightly compressed to accommodate the new line
+    height: 8,             // Increased from 5 to make the bars physically taller
     includetext: false,    
   });
 
   const barcodeRenderWidth = 90; 
   const barcodeX = (labelWidth - barcodeRenderWidth) / 2;
   
-  // 5 points for batch text height + 3 points gap
-  const barcodeY = batchY + 5 + 3; 
-  const barcodeRenderHeight = 8; 
+  // The barcode starts 4 points below the batch text
+  const barcodeY = batchY + 5 + 4; 
+
+  // INCREASED: Give PDFKit a taller bounding box to draw the new barcode safely
+  const barcodeRenderHeight = 12; 
 
   doc.image(barcodeBuffer, barcodeX, barcodeY, { 
     width: barcodeRenderWidth,
@@ -124,8 +129,9 @@ ipcMain.handle('generate-batch', async (event, data) => {
   });
   
   // 5. --- Footer ---
+  // This will still automatically sit perfectly 2 points below your taller barcode!
   const footerY = barcodeY + barcodeRenderHeight + 2;
-  doc.fontSize(5).text(`${currentId}`, 0, footerY, { width: labelWidth, align: 'center' });
+  doc.fontSize(5).text(`Серійний номер: ${currentId}`, 0, footerY, { width: labelWidth, align: 'center' });
 }
     
     doc.end();

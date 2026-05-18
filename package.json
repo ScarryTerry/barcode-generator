@@ -4,7 +4,7 @@
   "description": "Barcode and QR code generator desktop application built with Electron.",
   "main": "main.js",
   "scripts": {
-    "start": "electron .",
+    "start": "electron . --ozone-platform=x11 --disable-gpu",
     "build:win": "electron-builder --windows",
     "build:linux": "electron-builder --linux",
     "build:mac": "electron-builder --mac"
