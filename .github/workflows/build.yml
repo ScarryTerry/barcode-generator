@@ -29,9 +29,8 @@ jobs:
       - name: Install Dependencies
         run: npm install
 
-        - name: Create .env file for the build
-        run: |
-          echo "MANUFACTURER_NAME=${{ vars.MANUFACTURER_NAME }}" > .env
+      - name: Create .env file for the build
+        run: echo "MANUFACTURER_NAME=${{ vars.MANUFACTURER_NAME }}" > .env
         shell: bash
 
       - name: Build Application
