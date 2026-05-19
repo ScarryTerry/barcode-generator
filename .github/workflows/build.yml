@@ -37,6 +37,31 @@ jobs:
         env:
           ELECTRON_CACHE: ${{ github.workspace }}/.cache/electron
           ELECTRON_BUILDER_CACHE: ${{ github.workspace }}/.cache/electron-builder
+          # Fallback value using Repository Variables if Secret is empty
+          MANUFACTURER_NAME: ${{ secrets.MANUFACTURER_NAME || vars.MANUFACTURER_NAME }}
+        run: |
+          # 1. Inject the manufacturer string directly into the source file before packing
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            # Using PowerShell syntax or a node inline script for safe Cross-Platform file replacement
+            node -e "const fs = require('fs'); let c = fs.readFileSync('main.js', 'utf8'); c = c.replace(/process\.env\.MANUFACTURER_NAME \|\| 'Компанія відсутня'/g, \"'\" + process.env.MANUFACTURER_NAME + \"'\"); fs.writeFileSync('main.js', c);"
+          else
+            # Linux and Mac runners can handle inline node code uniformly
+            node -e "const fs = require('fs'); let c = fs.readFileSync('main.js', 'utf8'); c = c.replace(/process\.env\.MANUFACTURER_NAME \|\| 'Компанія відсутня'/g, \"'\" + process.env.MANUFACTURER_NAME + \"'\"); fs.writeFileSync('main.js', c);"
+          fi
+
+          # 2. Run standard compilers
+          if [ "$RUNNER_OS" == "Windows" ]; then
+            npm run build:win -- --publish never
+          elif [ "$RUNNER_OS" == "Linux" ]; then
+            ELECTRON_DISABLE_SECURITY_WARNINGS=true npm run build:linux -- --publish never
+          elif [ "$RUNNER_OS" == "macOS" ]; then
+            npm run build:mac -- --publish never
+          fi
+        shell: bash
+        
+        env:
+          ELECTRON_CACHE: ${{ github.workspace }}/.cache/electron
+          ELECTRON_BUILDER_CACHE: ${{ github.workspace }}/.cache/electron-builder
           # --- ADDED: Injecting the manufacturer name from GitHub Secrets ---
           MANUFACTURER_NAME: ${{ secrets.MANUFACTURER_NAME }}
         run: |
