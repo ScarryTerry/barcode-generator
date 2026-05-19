@@ -70,69 +70,67 @@ ipcMain.handle('generate-batch', async (event, data) => {
     const barcodeList = [];
 
     for (let i = 1; i <= amount; i++) {
-  const currentId = `${batchNumber}/${i}`;
-  barcodeList.push(currentId);
+      const currentId = `${batchNumber}/${i}`;
+      barcodeList.push(currentId);
 
-  if (i > 1) {
-    doc.addPage({ 
-      size: [labelWidth, labelHeight], 
-      margins: { top: 0, bottom: 0, left: 0, right: 0 } 
-    });
-  }
+      if (i > 1) {
+        doc.addPage({ 
+          size: [labelWidth, labelHeight], 
+          margins: { top: 0, bottom: 0, left: 0, right: 0 } 
+        });
+      }
 
-  // 1. --- Render the Name (with Dynamic Font Size) ---
-  // If the name is longer than 20 characters, drop size to 5, otherwise keep it at 6
-  const nameFontSize = name.length > 20 ? 5 : 6;
-  doc.fontSize(nameFontSize);
-  
-  doc.text(`${name}`, 0, 3, { width: labelWidth, align: 'center' });
-  
-  // PDFKit will accurately measure the height using whatever font size was just applied
-  const nameHeight = doc.heightOfString(`${name}`, { width: labelWidth });
+      // 1. --- Render the Name (with Dynamic Font Size) ---
+      const nameFontSize = name.length > 20 ? 5 : 6;
+      doc.fontSize(nameFontSize);
+      doc.text(`${name}`, 0, 3, { width: labelWidth, align: 'center' });
+      
+      const nameHeight = doc.heightOfString(`${name}`, { width: labelWidth });
 
-  // 2. --- NEW: Render Manufacturer ("Виробник") ---
-  const manufacturerText = `Виробник: ${process.env.MANUFACTURER_NAME || 'Компанія відсутня'}`;
-  const manufacturerY = 3 + nameHeight + 1; 
-  
-  doc.fontSize(5).text(manufacturerText, 0, manufacturerY, { width: labelWidth, align: 'center' });
-  const manufacturerHeight = doc.heightOfString(manufacturerText, { width: labelWidth });
+      // 2. --- Render Manufacturer ("Виробник") ---
+      const manufacturerText = `Виробник: ${process.env.MANUFACTURER_NAME || 'Компанія відсутня'}`;
+      const manufacturerY = 3 + nameHeight + 1; 
+      
+      doc.fontSize(5).text(manufacturerText, 0, manufacturerY, { width: labelWidth, align: 'center' });
+      const manufacturerHeight = doc.heightOfString(manufacturerText, { width: labelWidth });
 
-  // 3. --- Render Batch Number (Italicized) ---
-  const batchY = manufacturerY + manufacturerHeight + 1; 
-  doc.fontSize(5).text(`Партія: ${batchNumber}`, 0, batchY, { 
-    width: labelWidth, 
-    align: 'center',
-    oblique: true 
-  });
+      // 3. --- Generate & Render Barcode ---
+      // Moved up directly below the manufacturer details
+      const barcodeBuffer = await bwipjs.toBuffer({
+        bcid: 'code128',       
+        text: currentId,       
+        scale: 1.5,             
+        height: 8,             
+        includetext: false,    
+      });
 
-  // 4. --- Generate & Render Barcode ---
-  const barcodeBuffer = await bwipjs.toBuffer({
-    bcid: 'code128',       
-    text: currentId,       
-    scale: 1.5,             
-    height: 8,             // Increased from 5 to make the bars physically taller
-    includetext: false,    
-  });
+      const barcodeRenderWidth = 90; 
+      const barcodeX = (labelWidth - barcodeRenderWidth) / 2;
+      
+      // Sits safely 3 points below the manufacturer block
+      const barcodeY = manufacturerY + manufacturerHeight + 3; 
+      const barcodeRenderHeight = 12; 
 
-  const barcodeRenderWidth = 90; 
-  const barcodeX = (labelWidth - barcodeRenderWidth) / 2;
-  
-  // The barcode starts 4 points below the batch text
-  const barcodeY = batchY + 5 + 4; 
+      doc.image(barcodeBuffer, barcodeX, barcodeY, { 
+        width: barcodeRenderWidth,
+        height: barcodeRenderHeight 
+      });
+      
+      // 4. --- Render Batch Number (Moved under Barcode) ---
+      const batchY = barcodeY + barcodeRenderHeight + 2; 
+      doc.fontSize(5).text(`Партія: ${batchNumber}`, 0, batchY, { 
+        width: labelWidth, 
+        align: 'center',
+        oblique: true 
+      });
+      
+      const batchHeight = doc.heightOfString(`Партія: ${batchNumber}`, { width: labelWidth });
 
-  // INCREASED: Give PDFKit a taller bounding box to draw the new barcode safely
-  const barcodeRenderHeight = 12; 
-
-  doc.image(barcodeBuffer, barcodeX, barcodeY, { 
-    width: barcodeRenderWidth,
-    height: barcodeRenderHeight 
-  });
-  
-  // 5. --- Footer ---
-  // This will still automatically sit perfectly 2 points below your taller barcode!
-  const footerY = barcodeY + barcodeRenderHeight + 2;
-  doc.fontSize(5).text(`Серійний номер: ${currentId}`, 0, footerY, { width: labelWidth, align: 'center' });
-}
+      // 5. --- Footer (CurrentId Line) ---
+      // Sits 2 points below the newly placed Batch line
+      const footerY = batchY + batchHeight + 2;
+      doc.fontSize(5).text(`Серійний номер: ${currentId}`, 0, footerY, { width: labelWidth, align: 'center' });
+    }
     
     doc.end();
 
