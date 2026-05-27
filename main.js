@@ -8,25 +8,22 @@ require('dotenv').config();
 
 let mainWindow;
 
-
 function createWindow() {
   mainWindow = new BrowserWindow({
-  width: 113.04,
-  height: 67.68, // Slightly taller to accommodate styling safely
-  title: "Генератор пакетів штрих-кодів та QR-кодів",
-  webPreferences: {
-    nodeIntegration: false,
-    contextIsolation: true,
-    preload: path.join(__dirname, 'preload.js')
-  }
-});
+    width: 600,
+    height: 400,
+    title: "Генератор пакетів штрих-кодів та QR-кодів",
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+      preload: path.join(__dirname, 'preload.js')
+    }
+  });
 
   mainWindow.loadFile('index.html');
 }
 
-// --- ADD THIS LINE HERE BEFORE THE APP READY EVENT ---
 app.disableHardwareAcceleration();
-
 app.whenReady().then(createWindow);
 
 // Handle directory selection dialog
@@ -42,29 +39,40 @@ ipcMain.handle('generate-batch', async (event, data) => {
   const { name, batchNumber, amount, saveDir } = data;
   
   try {
-    const pdfPath = path.join(saveDir, `${name}_${batchNumber}_barcodes.pdf`);
-    const qrPath = path.join(saveDir, `${name}_${batchNumber}_qr.jpg`);
+    const sanitizedName = name.replace(/[^a-zA-Z0-9а-яА-ЯёЁ\s\-]/g, '').trim() || 'Без_Назви';
+    const pdfPath = path.join(saveDir, `${sanitizedName}_${batchNumber}_barcodes.pdf`);
+    const qrPath = path.join(saveDir, `${sanitizedName}_${batchNumber}_qr.jpg`);
 
+    // --- CONFIGURABLE MARGINS & GEOMETRY ---
     const labelWidth = 113.04;  // 1.57 inches
-    const labelHeight = 67.68;  // 0.94 inches
+    const labelHeight = 67.68; // 0.94 inches
+    
+    // Adjust these margins to control whitespace padding on borders
+    const margins = { top: 3, bottom: 2, left: 4, right: 4 };
+    const contentWidth = labelWidth - (margins.left + margins.right);
+    const contentHeight = labelHeight - (margins.top + margins.bottom);
+
+    // --- CONFIGURABLE FONT SIZES (BIGGER) ---
+    const titleFontMax = 7;     // Was 6
+    const titleFontMin = 5.5;   // Was 5
+    const metaFontSize = 6;     // Was 5 (Controls Manufacturer, Batch, and Serial)
 
     const doc = new PDFDocument({ 
       size: [labelWidth, labelHeight], 
-      margins: { top: 0, bottom: 0, left: 0, right: 0 } 
+      margins: { top: 0, bottom: 0, left: 0, right: 0 } // Handle padding calculations manually for layout safety
     });
     
     const pdfStream = fs.createWriteStream(pdfPath);
     doc.pipe(pdfStream);
 
-    // --- FIX: Register and apply local Unicode Font ---
+    // --- Register and apply local Unicode Font ---
     const fontPath = path.join(__dirname, 'fonts', 'arial.ttf');
 
     if (fs.existsSync(fontPath)) {
-    // We register it explicitly as 'Arial-Cyrillic' to force PDFKit to generate a clean UTF-8 subset
-    doc.registerFont('Arial-Cyrillic', fontPath);
-    doc.font('Arial-Cyrillic');
+      doc.registerFont('Arial-Cyrillic', fontPath);
+      doc.font('Arial-Cyrillic');
     } else {
-    throw new Error(`Font asset missing at: ${fontPath}`);
+      throw new Error(`Font asset missing at: ${fontPath}`);
     }
 
     const barcodeList = [];
@@ -80,56 +88,56 @@ ipcMain.handle('generate-batch', async (event, data) => {
         });
       }
 
-      // 1. --- Render the Name (with Dynamic Font Size) ---
-      const nameFontSize = name.length > 20 ? 5 : 6;
+      // 1. --- Name Header ---
+      const nameFontSize = name.length > 20 ? titleFontMin : titleFontMax;
       doc.fontSize(nameFontSize);
-      doc.text(`${name}`, 0, 3, { width: labelWidth, align: 'center' });
-      
-      const nameHeight = doc.heightOfString(`${name}`, { width: labelWidth });
+      doc.text(`${name}`, margins.left, margins.top, { width: contentWidth, align: 'center' });
+      const nameHeight = doc.heightOfString(`${name}`, { width: contentWidth });
 
-      // 2. --- Render Manufacturer ("Виробник") ---
+      // 2. --- Manufacturer Block ---
       const manufacturerText = `Виробник: ${process.env.MANUFACTURER_NAME || 'Компанія відсутня'}`;
-      const manufacturerY = 3 + nameHeight + 1; 
-      
-      doc.fontSize(5).text(manufacturerText, 0, manufacturerY, { width: labelWidth, align: 'center' });
-      const manufacturerHeight = doc.heightOfString(manufacturerText, { width: labelWidth });
+      const manufacturerY = margins.top + nameHeight + 1; 
+      doc.fontSize(metaFontSize).text(manufacturerText, margins.left, manufacturerY, { width: contentWidth, align: 'center' });
+      const manufacturerHeight = doc.heightOfString(manufacturerText, { width: contentWidth });
 
-      // 3. --- Generate & Render Barcode ---
-      // Moved up directly below the manufacturer details
+      // 3. --- Footer Metadata (Pre-calculating from the bottom up to maximize space) ---
+      doc.fontSize(metaFontSize);
+      const serialText = `Серійний номер: ${currentId}`;
+      const batchText = `Партія: ${batchNumber}`;
+      
+      const serialHeight = doc.heightOfString(serialText, { width: contentWidth });
+      const batchHeight = doc.heightOfString(batchText, { width: contentWidth });
+
+      // Dock footer info perfectly above bottom margins
+      const serialY = labelHeight - margins.bottom - serialHeight;
+      const batchY = serialY - batchHeight - 0.5;
+
+      doc.text(serialText, margins.left, serialY, { width: contentWidth, align: 'center' });
+      doc.text(batchText, margins.left, batchY, { width: contentWidth, align: 'center' });
+
+      // 4. --- Dynamic Barcode Sizing (Fills everything left in the middle) ---
+      const barcodeTopBoundary = manufacturerY + manufacturerHeight + 1.5;
+      const barcodeBottomBoundary = batchY - 1.5;
+      
+      // Dynamic height scales up perfectly to fill the center space
+      const availableBarcodeHeight = barcodeBottomBoundary - barcodeTopBoundary;
+
       const barcodeBuffer = await bwipjs.toBuffer({
         bcid: 'code128',       
         text: currentId,       
-        scale: 1.5,             
-        height: 8,             
+        scale: 2.0, // Scale up for crisper barcodes with higher font text             
+        height: availableBarcodeHeight,             
         includetext: false,    
       });
 
-      const barcodeRenderWidth = 90; 
-      const barcodeX = (labelWidth - barcodeRenderWidth) / 2;
-      
-      // Sits safely 3 points below the manufacturer block
-      const barcodeY = manufacturerY + manufacturerHeight + 3; 
-      const barcodeRenderHeight = 12; 
+      // Keep barcode horizontal sizing safely within label limits
+      const barcodeRenderWidth = contentWidth - 4; 
+      const barcodeX = margins.left + (contentWidth - barcodeRenderWidth) / 2;
 
-      doc.image(barcodeBuffer, barcodeX, barcodeY, { 
+      doc.image(barcodeBuffer, barcodeX, barcodeTopBoundary, { 
         width: barcodeRenderWidth,
-        height: barcodeRenderHeight 
+        height: availableBarcodeHeight 
       });
-      
-      // 4. --- Render Batch Number (Moved under Barcode) ---
-      const batchY = barcodeY + barcodeRenderHeight + 2; 
-      doc.fontSize(5).text(`Партія: ${batchNumber}`, 0, batchY, { 
-        width: labelWidth, 
-        align: 'center',
-        oblique: true 
-      });
-      
-      const batchHeight = doc.heightOfString(`Партія: ${batchNumber}`, { width: labelWidth });
-
-      // 5. --- Footer (CurrentId Line) ---
-      // Sits 2 points below the newly placed Batch line
-      const footerY = batchY + batchHeight + 2;
-      doc.fontSize(5).text(`Серійний номер: ${currentId}`, 0, footerY, { width: labelWidth, align: 'center' });
     }
     
     doc.end();
