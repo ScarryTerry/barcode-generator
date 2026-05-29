@@ -67,6 +67,7 @@ ipcMain.handle('generate-batch', async (event, data) => {
 
     // --- Register and apply local Unicode Font ---
     const fontPath = path.join(__dirname, 'fonts', 'arial.ttf');
+    const boldFontPath = path.join(__dirname, 'fonts', 'arialbd.ttf');
 
     if (fs.existsSync(fontPath)) {
       doc.registerFont('Arial-Cyrillic', fontPath);
@@ -74,6 +75,11 @@ ipcMain.handle('generate-batch', async (event, data) => {
     } else {
       throw new Error(`Font asset missing at: ${fontPath}`);
     }
+
+    if (!fs.existsSync(boldFontPath)) {
+      throw new Error(`Missing bold font file at: ${boldFontPath}`);
+    }
+    doc.registerFont('Arial-Bold', boldFontPath);
 
     const barcodeList = [];
 
@@ -112,8 +118,9 @@ ipcMain.handle('generate-batch', async (event, data) => {
       const serialY = labelHeight - margins.bottom - serialHeight;
       const batchY = serialY - batchHeight - 0.5;
 
-      doc.text(serialText, margins.left, serialY, { width: contentWidth, align: 'center' });
-      doc.text(batchText, margins.left, batchY, { width: contentWidth, align: 'center' });
+      
+      doc.font('Arial-Bold').text(serialText, margins.left, serialY, { width: contentWidth, align: 'center' });
+      doc.font('Arial-Bold').text(batchText, margins.left, batchY, { width: contentWidth, align: 'center',  });
 
       // 4. --- Dynamic Barcode Sizing (Fills everything left in the middle) ---
       const barcodeTopBoundary = manufacturerY + manufacturerHeight + 1.5;
